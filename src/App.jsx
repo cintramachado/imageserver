@@ -116,6 +116,26 @@ function App() {
       }
 
       const blob = await response.blob()
+
+      if ('showSaveFilePicker' in window) {
+        const fileHandle = await window.showSaveFilePicker({
+          suggestedName: 'images.zip',
+          types: [
+            {
+              description: 'ZIP file',
+              accept: {
+                'application/zip': ['.zip'],
+              },
+            },
+          ],
+        })
+
+        const writable = await fileHandle.createWritable()
+        await writable.write(blob)
+        await writable.close()
+        return
+      }
+
       const downloadUrl = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = downloadUrl

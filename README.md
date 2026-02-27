@@ -1,16 +1,26 @@
-# React + Vite
+# imageServer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicação React + Node para navegação de diretórios e seleção de imagens com download em ZIP.
 
-Currently, two official plugins are available:
+## Operação com Docker (recomendado)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Subir stack (build + run):
+	- `docker compose up --build`
+- Rodar em background:
+	- `docker compose up -d --build`
+- Ver logs em tempo real:
+	- `docker compose logs -f`
+- Parar e remover containers/rede:
+	- `docker compose down`
+- Rebuild limpo da imagem:
+	- `docker compose build --no-cache`
 
-## React Compiler
+## Endereços
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:3001`
 
-## Expanding the ESLint configuration
+## Observações
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- O backend usa a pasta local `Documents` do Windows montada no container via `docker-compose.yml`.
+- Se precisar acesso por outro dispositivo na rede, libere as portas `5173` e `3001` no firewall do Windows.

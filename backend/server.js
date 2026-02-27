@@ -1,12 +1,15 @@
 import { createServer } from 'node:http'
 import { createReadStream } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
-import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { homedir } from 'node:os'
 import JSZip from 'jszip'
 
 const PORT = Number(process.env.PORT) || 3001
-const documentsPath = join(homedir(), 'Documents')
+const configuredDocumentsPath = process.env.DOCUMENTS_PATH?.trim()
+const documentsPath = configuredDocumentsPath
+  ? resolve(configuredDocumentsPath)
+  : join(homedir(), 'Documents')
 const imageExtensions = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'])
 
 const imageMimeTypes = {
@@ -65,11 +68,9 @@ async function listEntries(basePath) {
 function isPathInsideRoot(rootPath, candidatePath) {
   const normalizedRoot = resolve(rootPath)
   const normalizedCandidate = resolve(candidatePath)
+  const relativePath = relative(normalizedRoot, normalizedCandidate)
 
-  return (
-    normalizedCandidate === normalizedRoot ||
-    normalizedCandidate.startsWith(`${normalizedRoot}\\`)
-  )
+  return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
 }
 
 function resolveRequestedDirectory(requestUrl) {
