@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import './App.css'
 
-const API_BASE_URL = 'http://localhost:3001'
+const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:3001`
 
 function App() {
   const [rootDirectory, setRootDirectory] = useState('')
