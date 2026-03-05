@@ -95,6 +95,21 @@ function App() {
     })
   }
 
+  const handleSelectAllOnPage = () => {
+    setSelectedImagePaths((previousPaths) => {
+      const imagePathsOnPage = entries
+        .filter((entry) => entry.type !== 'directory')
+        .map((entry) => entry.path)
+
+      const allPaths = new Set([...previousPaths, ...imagePathsOnPage])
+      return Array.from(allPaths)
+    })
+  }
+
+  const handleClearSelection = () => {
+    setSelectedImagePaths([])
+  }
+
   const handleDownloadSelected = async () => {
     if (selectedImagePaths.length === 0) {
       return
@@ -215,6 +230,25 @@ function App() {
             </section>
 
             <aside className="selected-panel-wrapper">
+              <div className="selection-actions">
+                <button
+                  type="button"
+                  className="selection-button"
+                  disabled={isLoading || !entries.some((entry) => entry.type !== 'directory')}
+                  onClick={handleSelectAllOnPage}
+                >
+                  Selecionar tudo
+                </button>
+                <button
+                  type="button"
+                  className="selection-button"
+                  disabled={selectedImagePaths.length === 0}
+                  onClick={handleClearSelection}
+                >
+                  Limpar seleção
+                </button>
+              </div>
+
               <div className="selected-panel">
                 <p className="selected-title">Imagens selecionadas</p>
                 {selectedImagePaths.length === 0 ? (

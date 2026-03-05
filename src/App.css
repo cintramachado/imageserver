@@ -18,6 +18,27 @@
   font-weight: 500;
 }
 
+.selection-actions {
+  margin: 0 0 0.75rem;
+  display: flex;
+  gap: 0.25rem;
+  justify-content: flex-end;
+}
+
+.selection-button {
+  border: 1px solid currentColor;
+  border-radius: 0.375rem;
+  background: transparent;
+  font: inherit;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+}
+
+.selection-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .directory-list {
   margin: 0;
   padding: 0;
@@ -99,6 +120,7 @@
   font: inherit;
   padding: 0.5rem 0.8rem;
   cursor: pointer;
+  justify-self: flex-end;
 }
 
 .download-button:disabled {
