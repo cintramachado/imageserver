@@ -237,7 +237,7 @@ function App() {
                   disabled={isLoading || !entries.some((entry) => entry.type !== 'directory')}
                   onClick={handleSelectAllOnPage}
                 >
-                  Selecionar tudo
+                  Selecionar todas as imagens
                 </button>
                 <button
                   type="button"
@@ -245,7 +245,7 @@ function App() {
                   disabled={selectedImagePaths.length === 0}
                   onClick={handleClearSelection}
                 >
-                  Limpar seleção
+                  Apagar seleção
                 </button>
               </div>
 

@@ -8,7 +8,7 @@
 
 .content-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 760px) 360px;
   gap: 1rem;
   align-items: start;
 }
@@ -54,6 +54,7 @@
   border: 1px solid currentColor;
   border-radius: 0.375rem;
   padding: 0.55rem 0.7rem;
+  min-width: 0;
 }
 
 .entry-icon {
@@ -69,6 +70,11 @@
   color: inherit;
   cursor: pointer;
   text-align: left;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .entry-button:hover {
@@ -79,6 +85,15 @@
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.image-entry span {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .image-thumb {
@@ -152,4 +167,19 @@
 
 .app-name {
   font-weight: 600;
+}
+
+@media (max-width: 960px) {
+  .content-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .selected-panel-wrapper {
+    padding-left: 0;
+  }
+
+  .selection-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
 }
