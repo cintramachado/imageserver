@@ -183,3 +183,64 @@
     flex-wrap: wrap;
   }
 }
+
+@media (max-width: 768px) {
+  .content {
+    padding: 0.75rem;
+  }
+
+  .top-bar {
+    flex-wrap: wrap;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .directory-item {
+    padding: 0.5rem 0.6rem;
+  }
+
+  .image-thumb {
+    width: 96px;
+    height: 96px;
+  }
+
+  .selected-panel {
+    min-height: 180px;
+  }
+
+  .download-button {
+    justify-self: stretch;
+  }
+}
+
+@media (max-width: 560px) {
+  .content {
+    padding: 0.6rem;
+  }
+
+  .current-directory {
+    margin-bottom: 0.6rem;
+  }
+
+  .top-bar {
+    gap: 0.5rem;
+  }
+
+  .back-button,
+  .selection-button,
+  .download-button {
+    width: 100%;
+  }
+
+  .selection-actions {
+    gap: 0.4rem;
+  }
+
+  .image-entry {
+    gap: 0.45rem;
+  }
+
+  .image-thumb {
+    width: 72px;
+    height: 72px;
+  }
+}
