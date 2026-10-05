@@ -54,6 +54,17 @@ function toErrorDetails(error) {
   }
 }
 
+function toUnknownErrorDetails(value) {
+  if (value instanceof Error) {
+    return toErrorDetails(value)
+  }
+
+  return {
+    name: 'UnknownError',
+    message: truncateValue(String(value)),
+  }
+}
+
 async function writeAuditLog(entry) {
   const payload = {
     timestamp: new Date().toISOString(),
@@ -241,6 +252,24 @@ const server = createServer(async (request, response) => {
     })
   })
 
+  response.on('close', () => {
+    if (response.writableEnded) {
+      return
+    }
+
+    void writeAuditLog({
+      source: 'backend',
+      category: 'http',
+      level: 'warn',
+      event: 'response_aborted',
+      requestId,
+      method: request.method,
+      path: requestUrl.pathname,
+      durationMs: Date.now() - startedAt,
+      clientIp: readClientIp(request),
+    })
+  })
+
   if (request.method === 'OPTIONS') {
     response.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
@@ -288,12 +317,38 @@ const server = createServer(async (request, response) => {
       const extension = extname(imagePath).toLowerCase()
       const mimeType = imageMimeTypes[extension] || 'application/octet-stream'
 
-      response.writeHead(200, {
-        'Content-Type': mimeType,
-        'Access-Control-Allow-Origin': '*',
+      const imageStream = createReadStream(imagePath)
+
+      imageStream.on('open', () => {
+        response.writeHead(200, {
+          'Content-Type': mimeType,
+          'Access-Control-Allow-Origin': '*',
+        })
+        imageStream.pipe(response)
       })
 
-      createReadStream(imagePath).pipe(response)
+      imageStream.on('error', (error) => {
+        void writeAuditLog({
+          source: 'backend',
+          category: 'image',
+          level: 'error',
+          event: 'image_stream_failed',
+          requestId,
+          path: url.pathname,
+          queryPath: url.searchParams.get('path') || '',
+          error: toErrorDetails(error),
+        })
+
+        if (response.headersSent) {
+          response.destroy(error)
+          return
+        }
+
+        sendJson(response, 404, {
+          error: 'Imagem não encontrada.',
+        })
+      })
+
       return
     } catch (error) {
       void writeAuditLog({
@@ -319,6 +374,15 @@ const server = createServer(async (request, response) => {
       const selectedPaths = Array.isArray(payload.paths) ? payload.paths : []
 
       if (selectedPaths.length === 0) {
+        void writeAuditLog({
+          source: 'backend',
+          category: 'download',
+          level: 'warn',
+          event: 'zip_empty_selection',
+          requestId,
+          path: url.pathname,
+        })
+
         sendJson(response, 400, {
           error: 'Nenhuma imagem selecionada para download.',
         })
@@ -326,6 +390,17 @@ const server = createServer(async (request, response) => {
       }
 
       const uniquePaths = [...new Set(selectedPaths)]
+      void writeAuditLog({
+        source: 'backend',
+        category: 'download',
+        level: 'info',
+        event: 'zip_generation_started',
+        requestId,
+        path: url.pathname,
+        selectedCount: selectedPaths.length,
+        uniqueCount: uniquePaths.length,
+      })
+
       const zip = new JSZip()
 
       for (const imagePathRaw of uniquePaths) {
@@ -377,7 +452,7 @@ const server = createServer(async (request, response) => {
         requestId: payload?.requestId || requestId,
         path: payload?.path || '',
         clientTimestamp: payload?.timestamp || '',
-        message: truncateValue(String(payload?.message || '')), 
+        message: truncateValue(String(payload?.message || '')),
         context: sanitizeClientContext(payload?.context),
         clientIp: readClientIp(request),
         userAgent: truncateValue(String(request.headers['user-agent'] || ''), 400),
@@ -420,4 +495,28 @@ server.listen(PORT, () => {
   })
 
   console.log(`Backend ativo em http://localhost:${PORT}`)
+})
+
+process.on('uncaughtException', (error) => {
+  void writeAuditLog({
+    source: 'backend',
+    category: 'runtime',
+    level: 'error',
+    event: 'uncaught_exception',
+    error: toErrorDetails(error),
+  })
+
+  console.error('uncaughtException', error)
+})
+
+process.on('unhandledRejection', (reason) => {
+  void writeAuditLog({
+    source: 'backend',
+    category: 'runtime',
+    level: 'error',
+    event: 'unhandled_rejection',
+    error: toUnknownErrorDetails(reason),
+  })
+
+  console.error('unhandledRejection', reason)
 })
