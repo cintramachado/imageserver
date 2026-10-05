@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import './App.css'
+import { auditLog } from './auditLogger.js'
 
 const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:3001`
 
@@ -56,7 +57,16 @@ function App() {
       } else {
         setEntries([])
       }
-    } catch {
+    } catch (error) {
+      void auditLog({
+        level: 'error',
+        event: 'fetch_entries_failed',
+        message: 'Falha ao carregar itens da API de diretórios.',
+        context: {
+          targetPath,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        },
+      })
       setError('Não foi possível carregar os itens.')
     } finally {
       setIsLoading(false)
@@ -160,7 +170,16 @@ function App() {
       anchor.click()
       document.body.removeChild(anchor)
       URL.revokeObjectURL(downloadUrl)
-    } catch {
+    } catch (error) {
+      void auditLog({
+        level: 'error',
+        event: 'download_zip_failed',
+        message: 'Falha ao baixar ZIP com imagens selecionadas.',
+        context: {
+          selectedCount: selectedImagePaths.length,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        },
+      })
       setError('Não foi possível baixar o arquivo ZIP.')
     }
   }

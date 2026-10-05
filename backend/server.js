@@ -1,8 +1,10 @@
+/* global process */
 import { createServer } from 'node:http'
 import { createReadStream } from 'node:fs'
-import { readdir, readFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, appendFile } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { homedir } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import JSZip from 'jszip'
 
 const PORT = Number(process.env.PORT) || 3001
@@ -20,6 +22,85 @@ const imageMimeTypes = {
   '.webp': 'image/webp',
   '.bmp': 'image/bmp',
   '.svg': 'image/svg+xml',
+}
+
+const logsDirectory = join(process.cwd(), 'backend', 'logs')
+const auditLogFilePath = join(logsDirectory, 'audit.log.ndjson')
+
+function truncateValue(value, maxLength = 700) {
+  if (typeof value !== 'string') {
+    return value
+  }
+
+  if (value.length <= maxLength) {
+    return value
+  }
+
+  return `${value.slice(0, maxLength)}...`
+}
+
+function toErrorDetails(error) {
+  if (!(error instanceof Error)) {
+    return {
+      message: String(error),
+      name: 'UnknownError',
+    }
+  }
+
+  return {
+    name: error.name,
+    message: truncateValue(error.message),
+    stack: truncateValue(error.stack || ''),
+  }
+}
+
+async function writeAuditLog(entry) {
+  const payload = {
+    timestamp: new Date().toISOString(),
+    ...entry,
+  }
+
+  try {
+    await mkdir(logsDirectory, { recursive: true })
+    await appendFile(auditLogFilePath, `${JSON.stringify(payload)}\n`, 'utf8')
+  } catch (error) {
+    console.error('Falha ao persistir log de auditoria', toErrorDetails(error))
+  }
+}
+
+function sanitizeClientContext(context) {
+  if (!context || typeof context !== 'object' || Array.isArray(context)) {
+    return {}
+  }
+
+  const entries = Object.entries(context).slice(0, 15)
+  const sanitized = {}
+
+  for (const [key, value] of entries) {
+    if (typeof value === 'string') {
+      sanitized[key] = truncateValue(value, 1000)
+      continue
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+      sanitized[key] = value
+      continue
+    }
+
+    sanitized[key] = truncateValue(JSON.stringify(value), 1000)
+  }
+
+  return sanitized
+}
+
+function readClientIp(request) {
+  const forwardedFor = request.headers['x-forwarded-for']
+
+  if (typeof forwardedFor === 'string' && forwardedFor.length > 0) {
+    return forwardedFor.split(',')[0].trim()
+  }
+
+  return request.socket.remoteAddress || 'unknown'
 }
 
 function sendJson(response, statusCode, payload) {
@@ -140,6 +221,26 @@ async function parseRequestBody(request) {
 }
 
 const server = createServer(async (request, response) => {
+  const requestId = randomUUID()
+  const requestUrl = new URL(request.url, 'http://localhost')
+  const startedAt = Date.now()
+
+  response.setHeader('X-Request-Id', requestId)
+  response.on('finish', () => {
+    void writeAuditLog({
+      source: 'backend',
+      category: 'http',
+      level: response.statusCode >= 500 ? 'error' : 'info',
+      event: 'response_sent',
+      requestId,
+      method: request.method,
+      path: requestUrl.pathname,
+      statusCode: response.statusCode,
+      durationMs: Date.now() - startedAt,
+      clientIp: readClientIp(request),
+    })
+  })
+
   if (request.method === 'OPTIONS') {
     response.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
@@ -150,7 +251,7 @@ const server = createServer(async (request, response) => {
     return
   }
 
-  const url = new URL(request.url, 'http://localhost')
+  const url = requestUrl
 
   if (request.method === 'GET' && url.pathname === '/api/directories') {
     try {
@@ -163,7 +264,17 @@ const server = createServer(async (request, response) => {
         entries,
       })
       return
-    } catch {
+    } catch (error) {
+      void writeAuditLog({
+        source: 'backend',
+        category: 'directories',
+        level: 'error',
+        event: 'list_directories_failed',
+        requestId,
+        path: url.pathname,
+        queryPath: url.searchParams.get('path') || '',
+        error: toErrorDetails(error),
+      })
       sendJson(response, 500, {
         error: 'Falha ao listar diretórios em Documents.',
       })
@@ -184,7 +295,17 @@ const server = createServer(async (request, response) => {
 
       createReadStream(imagePath).pipe(response)
       return
-    } catch {
+    } catch (error) {
+      void writeAuditLog({
+        source: 'backend',
+        category: 'image',
+        level: 'warn',
+        event: 'image_fetch_failed',
+        requestId,
+        path: url.pathname,
+        queryPath: url.searchParams.get('path') || '',
+        error: toErrorDetails(error),
+      })
       sendJson(response, 404, {
         error: 'Imagem não encontrada.',
       })
@@ -223,9 +344,61 @@ const server = createServer(async (request, response) => {
       })
       response.end(zipBuffer)
       return
-    } catch {
+    } catch (error) {
+      void writeAuditLog({
+        source: 'backend',
+        category: 'download',
+        level: 'error',
+        event: 'zip_generation_failed',
+        requestId,
+        path: url.pathname,
+        error: toErrorDetails(error),
+      })
       sendJson(response, 400, {
         error: 'Falha ao gerar arquivo ZIP.',
+      })
+      return
+    }
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/audit') {
+    try {
+      const payload = await parseRequestBody(request)
+      const level =
+        payload?.level === 'error' || payload?.level === 'warn' || payload?.level === 'info'
+          ? payload.level
+          : 'info'
+
+      await writeAuditLog({
+        source: 'frontend',
+        category: payload?.category || 'client',
+        level,
+        event: payload?.event || 'frontend_event',
+        requestId: payload?.requestId || requestId,
+        path: payload?.path || '',
+        clientTimestamp: payload?.timestamp || '',
+        message: truncateValue(String(payload?.message || '')), 
+        context: sanitizeClientContext(payload?.context),
+        clientIp: readClientIp(request),
+        userAgent: truncateValue(String(request.headers['user-agent'] || ''), 400),
+      })
+
+      sendJson(response, 202, {
+        status: 'accepted',
+      })
+      return
+    } catch (error) {
+      void writeAuditLog({
+        source: 'backend',
+        category: 'audit',
+        level: 'error',
+        event: 'audit_ingestion_failed',
+        requestId,
+        error: toErrorDetails(error),
+      })
+
+      sendJson(response, 400, {
+        error: 'Falha ao registrar auditoria do cliente.',
       })
       return
     }
@@ -237,5 +410,14 @@ const server = createServer(async (request, response) => {
 })
 
 server.listen(PORT, () => {
+  void writeAuditLog({
+    source: 'backend',
+    category: 'startup',
+    level: 'info',
+    event: 'server_started',
+    port: PORT,
+    documentsPath,
+  })
+
   console.log(`Backend ativo em http://localhost:${PORT}`)
 })
