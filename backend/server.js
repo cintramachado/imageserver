@@ -298,7 +298,13 @@ function handleImageRequest({
     const extension = extname(imagePath).toLowerCase()
     const mimeType = imageMimeTypes[extension] || 'application/octet-stream'
     const imageStream = createReadStreamImpl(imagePath)
+    let streamStarted = false
     let requestAborted = false
+
+    const cleanup = () => {
+      request.off('aborted', onClientAborted)
+      response.off('close', onResponseClosed)
+    }
 
     const onClientAborted = () => {
       requestAborted = true
@@ -307,10 +313,20 @@ function handleImageRequest({
       imageStream.destroy(abortedError)
     }
 
+    const onResponseClosed = () => {
+      if (!response.writableEnded && !imageStream.destroyed) {
+        const abortedError = new Error('client_aborted')
+        abortedError.code = 'CLIENT_ABORTED'
+        imageStream.destroy(abortedError)
+      }
+    }
+
     request.once('aborted', onClientAborted)
+    response.once('close', onResponseClosed)
 
     imageStream.once('open', () => {
       if (response.destroyed || response.writableEnded) {
+        cleanup()
         imageStream.destroy()
         return
       }
@@ -321,14 +337,13 @@ function handleImageRequest({
           'Access-Control-Allow-Origin': '*',
         })
       }
+
+      streamStarted = true
+      imageStream.pipe(response)
     })
 
-    pipeline(imageStream, response, (error) => {
-      request.off('aborted', onClientAborted)
-
-      if (!error) {
-        return
-      }
+    imageStream.on('error', (error) => {
+      cleanup()
 
       if (isClientDisconnectError(error) || requestAborted) {
         void log({
@@ -362,7 +377,7 @@ function handleImageRequest({
         error: toErrorDetails(error),
       })
 
-      if (sendJsonIfPossible(response, statusCode, { error: clientMessage })) {
+      if (!streamStarted && sendJsonIfPossible(response, statusCode, { error: clientMessage })) {
         return
       }
 
@@ -370,6 +385,8 @@ function handleImageRequest({
         response.destroy(error)
       }
     })
+
+    response.on('finish', cleanup)
 
     return true
   } catch (error) {
