@@ -8,6 +8,7 @@
     "dev:backend": "node --watch backend/server.js",
     "dev:all": "concurrently \"npm:dev\" \"npm:dev:backend\"",
     "backend": "node backend/server.js",
+    "test": "node --test backend/tests/**/*.test.js",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
